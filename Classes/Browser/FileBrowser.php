@@ -113,8 +113,8 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
 
         // The key number 3 of the bparams contains the "allowed" string. Disallowed is not passed to
         // the element browser at all but only filtered out in TCEMain afterwards
-        $allowedFileExtensions = explode('|', $this->bparams)[3];
-        if (!empty($allowedFileExtensions) && $allowedFileExtensions !== 'sys_file' && $allowedFileExtensions !== '*') {
+        $allowedFileExtensions = GeneralUtility::trimExplode(',', explode('|', $this->bparams)[3], true);
+        if (!empty($allowedFileExtensions) && $allowedFileExtensions[0] !== 'sys_file' && $allowedFileExtensions[0] !== '*') {
             // Create new filter object
             $filterObject = GeneralUtility::makeInstance(FileExtensionFilter::class);
             $filterObject->setAllowedFileExtensions($allowedFileExtensions);
@@ -125,7 +125,6 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
                 $storage->addFileAndFolderNameFilter(array($filterObject, 'filterFileList'));
             }
         }
-        // Create upload/create folder forms, if a path is given
         if ($this->expandFolder) {
             $fileOrFolderObject = null;
 
@@ -159,10 +158,8 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
         $uploadForm = '';
         $createFolder = '';
         if ($this->selectedFolder) {
-            $pArr = explode('|', $this->bparams);
-            $allowedExtensions = isset($pArr[3]) ? GeneralUtility::trimExplode(',', $pArr[3], true) : [];
             $folderUtilityRenderer = GeneralUtility::makeInstance(FolderUtilityRenderer::class, $this);
-            $uploadForm = $folderUtilityRenderer->uploadForm($this->selectedFolder, $allowedExtensions);
+            $uploadForm = $folderUtilityRenderer->uploadForm($this->selectedFolder, $allowedFileExtensions);
             $createFolder = $folderUtilityRenderer->createFolder($this->selectedFolder);
         }
 
@@ -227,11 +224,11 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
      * For TYPO3 Element Browser: Expand folder of files.
      *
      * @param Folder $folder The folder path to expand
-     * @param string $extensionList List of fileextensions to show
+     * @param array $extensionList List of fileextensions to show
      * @param bool $noThumbs Whether to show thumbnails or not. If set, no thumbnails are shown.
      * @return string HTML output
      */
-    public function renderFilesInFolder(Folder $folder, $extensionList = '', $noThumbs = false)
+    public function renderFilesInFolder(Folder $folder, array $extensionList = [], $noThumbs = false)
     {
         if (!$folder->checkActionPermission('read')) {
             return '';
@@ -242,7 +239,7 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
         if ($this->searchWord !== '') {
             $files = $this->fileRepository->searchByName($folder, $this->searchWord);
         } else {
-            $extensionList = $extensionList === '*' ? '' : $extensionList;
+            $extensionList = !empty($extensionList) && $extensionList[0] === '*' ? [] : $extensionList;
             $files = $this->getFilesInFolder($folder, $extensionList);
         }
         $filesCount = count($files);
@@ -348,7 +345,7 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
         }
 
         $out = '<h3>' . $lang->getLL('files', true) . ' ' . $filesCount . ':</h3>';
-        $out .= $this->getFileSearchField();
+        $out .= GeneralUtility::makeInstance(FolderUtilityRenderer::class, $this)->getFileSearchField($this->searchWord);
         $out .= '<div id="filelist">';
         $out .= $this->getBulkSelector($filesCount);
 
@@ -370,12 +367,12 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
      * Get a list of Files in a folder filtered by extension
      *
      * @param Folder $folder
-     * @param string $extensionList
+     * @param array $extensionList
      * @return File[]
      */
-    protected function getFilesInFolder(Folder $folder, $extensionList)
+    protected function getFilesInFolder(Folder $folder, array $extensionList)
     {
-        if ($extensionList !== '') {
+        if (!empty($extensionList)) {
             /** @var FileExtensionFilter $filter */
             $filter = GeneralUtility::makeInstance(FileExtensionFilter::class);
             $filter->setAllowedFileExtensions($extensionList);
@@ -421,26 +418,6 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
         } else {
             $out .= '<div style="padding-top: 15px;"></div>';
         }
-        return $out;
-    }
-
-    /**
-     * Get the HTML data required for the file search field of the TYPO3 Element Browser.
-     *
-     * @return string HTML data required for the search field in the file list of the Element Browser
-     */
-    protected function getFileSearchField()
-    {
-        $action = $this->getScriptUrl() . GeneralUtility::implodeArrayForUrl('', $this->getUrlParameters([]));
-        $out = '
-			<form method="post" action="' . htmlspecialchars($action) . '" style="padding-bottom: 15px;">
-				<div class="input-group">
-					<input class="form-control" type="text" name="searchWord" value="' . htmlspecialchars($this->searchWord) . '">
-					<span class="input-group-btn">
-						<button class="btn btn-default" type="submit">' . $this->getLanguageService()->sL('LLL:EXT:filelist/Resources/Private/Language/locallang.xlf:search', true) . '</button>
-					</span>
-				</div>
-			</form>';
         return $out;
     }
 
